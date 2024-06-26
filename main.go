@@ -35,13 +35,29 @@ var (
 		"TRACE":   {}}
 )
 
-func runHealthcheck(method, url string, timeout time.Duration) int {
-	logger.Info(fmt.Sprintf("Querying Endpoint %v", url))
+func runHealthcheck(healthcheckMethod, helthcheckUrl string, timeout time.Duration) int {
+	logger.Info(fmt.Sprintf("Querying Endpoint %v", helthcheckUrl))
+
+	if healthcheckTimeout < 0 || healthcheckTimeout > 360 {
+		logger.Error("The timeout must be between 0 and 360 seconds")
+		return exitCodeError
+	}
+
+	_, err := url.ParseRequestURI(helthcheckUrl)
+	if err != nil {
+		logger.Error("The health check URL must be valid")
+		return exitCodeError
+	}
+
+	if _, ok := validMethods[strings.ToUpper(healthcheckMethod)]; !ok {
+		logger.Error("The method must be a valid HTTP method")
+		return exitCodeError
+	}
 
 	client := &http.Client{
 		Timeout: timeout * time.Second,
 	}
-	r, err := http.NewRequest(method, url, nil)
+	r, err := http.NewRequest(healthcheckMethod, helthcheckUrl, nil)
 	if err != nil {
 		logger.Error(fmt.Sprintf("error creating healthcheck request: %v", err))
 		return exitCodeError
@@ -49,12 +65,12 @@ func runHealthcheck(method, url string, timeout time.Duration) int {
 
 	resp, err := client.Do(r)
 	if err != nil {
-		logger.Error(fmt.Sprintf("Health check %s: Error %s", url, err))
+		logger.Error(fmt.Sprintf("Health check %s: Error %s", helthcheckUrl, err))
 		return exitCodeError
 	}
 	defer resp.Body.Close()
 
-	logger.Info(fmt.Sprintf("Health check %s: HTTP status code %s", url, resp.Status))
+	logger.Info(fmt.Sprintf("Health check %s: HTTP status code %s", helthcheckUrl, resp.Status))
 	return exitCodeSuccess
 }
 
@@ -69,19 +85,6 @@ func main() {
 	flag.Parse()
 	if mode != "http" {
 		log.Fatal("Only HTTP mode is available for the health check")
-	}
-
-	if healthcheckTimeout < 0 || healthcheckTimeout > 360 {
-		log.Fatal("The timeout must be between 0 and 360 seconds")
-	}
-
-	_, err := url.ParseRequestURI(healthcheckURL)
-	if err != nil {
-		log.Fatal("The health check URL must be valid")
-	}
-
-	if _, ok := validMethods[strings.ToUpper(healthcheckMethod)]; !ok {
-		log.Fatal("The method must be a valid HTTP method")
 	}
 
 	logger.Info(fmt.Sprintf("Starting health check at %v", healthcheckURL))
